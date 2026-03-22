@@ -13,6 +13,9 @@
 // const ZingMp3Router = require("./routers/api/ZingRouter");
 // app.use("/api", cors(), ZingMp3Router);
 
+// const YoutubeRoute = require("./routers/api/YoutubeRoute.js");
+// app.use("/api", cors(), YoutubeRoute);
+
 // // Page Error
 // app.get("*", (req, res) => {
 //   res.send("Nhập Sai Đường Dẫn! Vui Lòng Nhập Lại >.<");
@@ -40,6 +43,9 @@ app.get("/", (req, res) => {
 // ZingMp3Router
 const ZingMp3Router = require("./routers/api/ZingRouter");
 app.use("/api", cors(), ZingMp3Router);
+
+const YoutubeRoute = require("./routers/api/YoutubeRoute.js");
+app.use("/api", cors(), YoutubeRoute);
 
 // Page Error
 app.get("*", (req, res) => {
