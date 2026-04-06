@@ -1,4 +1,5 @@
 const { execFile } = require("child_process");
+const path = require("path");
 
 class YoutubeController {
   async search(req, res) {
@@ -45,10 +46,10 @@ class YoutubeController {
       if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
         return res.status(400).json({ message: "Invalid videoId" });
       }
-
+      const ytdlpPath = path.join(process.cwd(), "yt-dlp");
       const url = `https://www.youtube.com/watch?v=${videoId}`;
       execFile(
-        "./yt-dlp",
+        ytdlpPath,
         ["-f", "bestaudio", "-g", url],
         { timeout: 10000 },
         (err, stdout, stderr) => {
@@ -59,12 +60,10 @@ class YoutubeController {
             });
           }
 
-          const audioUrl = stdout.trim();
-
           res.json({
             success: true,
             videoId,
-            audioUrl,
+            audioUrl: stdout.trim(),
           });
         }
       );

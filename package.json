@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "postinstall": "wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp && chmod +x yt-dlp"
+    "postinstall": "node download-yt-dlp.js"
   },
   "keywords": [],
   "author": "hoanghai <hoanghai121298.dhtl@gmail.com>",
