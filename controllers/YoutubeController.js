@@ -48,8 +48,8 @@ class YoutubeController {
 
       const url = `https://www.youtube.com/watch?v=${videoId}`;
       execFile(
-        "python3",
-        ["-m", "yt_dlp", "-f", "bestaudio", "-g", url],
+        "./yt-dlp",
+        ["-f", "bestaudio", "-g", url],
         { timeout: 10000 },
         (err, stdout, stderr) => {
           if (err) {
