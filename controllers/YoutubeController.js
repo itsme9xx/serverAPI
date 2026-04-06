@@ -84,9 +84,19 @@ class YoutubeController {
 
       execFile(
         ytdlpPath,
-        ["-f", "bestaudio", "-g", "--no-warnings", "--no-playlist", url],
+        [
+          "-f",
+          "bestaudio",
+          "-g",
+          "--no-warnings",
+          "--no-playlist",
+          "--no-check-certificate",
+          "--user-agent",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+          url,
+        ],
         {
-          timeout: 20000,
+          timeout: 30000, // tăng timeout
           maxBuffer: 1024 * 1024 * 10,
         },
         (err, stdout, stderr) => {
@@ -97,18 +107,16 @@ class YoutubeController {
             });
           }
 
-          //
           const lines = stdout
             .split("\n")
             .map((l) => l.trim())
             .filter(Boolean);
-
           const audioUrl = lines[0];
 
           if (!audioUrl) {
-            return res.status(500).json({
-              message: "Không tìm thấy audio URL",
-            });
+            return res
+              .status(500)
+              .json({ message: "Không tìm thấy audio URL" });
           }
 
           res.json({
