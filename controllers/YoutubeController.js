@@ -1,4 +1,5 @@
 const { execFile } = require("child_process");
+const { Readable } = require("stream");
 
 class YoutubeController {
   async search(req, res) {
@@ -71,6 +72,31 @@ class YoutubeController {
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error" });
+    }
+  }
+  async getDownload(req, res) {
+    try {
+      const { url } = req.query;
+
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        },
+      });
+
+      console.log("status:", response.status);
+      console.log("content-type:", response.headers.get("content-type"));
+      const contentType = response.headers.get("content-type");
+      if (!response.ok) {
+        return res.status(500).json({ msg: "Fail" });
+      }
+
+      res.setHeader("Content-Type", contentType);
+      const stream = Readable.fromWeb(response.body);
+      stream.pipe(res);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ msg: "Error" });
     }
   }
 }
