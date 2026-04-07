@@ -1,37 +1,4 @@
 const { execFile } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const https = require("https");
-
-const ytdlpPath = path.join(process.cwd(), "yt-dlp");
-
-function downloadYtDlp() {
-  return new Promise((resolve, reject) => {
-    if (fs.existsSync(ytdlpPath)) {
-      return resolve();
-    }
-
-    console.log("Downloading yt-dlp...");
-
-    const file = fs.createWriteStream(ytdlpPath);
-
-    https
-      .get(
-        "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp",
-        (res) => {
-          res.pipe(file);
-
-          file.on("finish", () => {
-            file.close();
-            fs.chmodSync(ytdlpPath, 0o755);
-            console.log("yt-dlp downloaded");
-            resolve();
-          });
-        }
-      )
-      .on("error", reject);
-  });
-}
 
 class YoutubeController {
   async search(req, res) {
@@ -58,13 +25,14 @@ class YoutubeController {
           channel: video.author?.name,
         }));
 
-      res.json({ data: videos });
+      res.json({
+        data: videos,
+      });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Server error" });
     }
   }
-
   async getAudio(req, res) {
     try {
       const { videoId } = req.query;
@@ -78,46 +46,20 @@ class YoutubeController {
         return res.status(400).json({ message: "Invalid videoId" });
       }
 
-      await downloadYtDlp();
-
       const url = `https://www.youtube.com/watch?v=${videoId}`;
-
       execFile(
-        ytdlpPath,
-        [
-          "-f",
-          "bestaudio",
-          "-g",
-          "--no-warnings",
-          "--no-playlist",
-          "--no-check-certificate",
-          "--user-agent",
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-          url,
-        ],
-        {
-          timeout: 30000, // tăng timeout
-          maxBuffer: 1024 * 1024 * 10,
-        },
+        "python",
+        ["-m", "yt_dlp", "-f", "bestaudio", "-g", url],
+        { timeout: 10000 },
         (err, stdout, stderr) => {
           if (err) {
-            console.error("yt-dlp error:", stderr || err);
+            console.error(stderr);
             return res.status(500).json({
               message: "Không thể lấy audio",
             });
           }
 
-          const lines = stdout
-            .split("\n")
-            .map((l) => l.trim())
-            .filter(Boolean);
-          const audioUrl = lines[0];
-
-          if (!audioUrl) {
-            return res
-              .status(500)
-              .json({ message: "Không tìm thấy audio URL" });
-          }
+          const audioUrl = stdout.trim();
 
           res.json({
             success: true,
