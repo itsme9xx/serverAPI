@@ -16,7 +16,7 @@ class YoutubeController {
 
       const videos = result.results
         .filter((item) => item.type === "Video" && item.id)
-        .slice(0, 8)
+        .slice(0, 10)
         .map((video) => ({
           title: video.title?.text,
           videoId: video.id,
