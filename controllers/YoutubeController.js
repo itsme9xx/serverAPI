@@ -1,5 +1,12 @@
 const { execFile } = require("child_process");
+const { spawn } = require("child_process");
 const { Readable } = require("stream");
+const fs = require("fs-extra");
+const os = require("os");
+const path = require("path");
+
+const cacheDir = path.join(__dirname, "audio_cache");
+fs.ensureDirSync(cacheDir);
 
 class YoutubeController {
   async search(req, res) {
@@ -48,10 +55,14 @@ class YoutubeController {
       }
 
       const url = `https://www.youtube.com/watch?v=${videoId}`;
+      const userAgent = req.headers["user-agent"] || "";
+      const isIphone = /iPhone|iPad|iPod/i.test(userAgent);
+      const filePath = path.join(cacheDir, `${videoId}.mp3`);
+
       execFile(
         "python",
         ["-m", "yt_dlp", "-f", "bestaudio", "-g", url],
-        { timeout: 10000 },
+        { timeout: 15000 },
         (err, stdout, stderr) => {
           if (err) {
             console.error(stderr);
@@ -62,10 +73,53 @@ class YoutubeController {
 
           const audioUrl = stdout.trim();
 
-          res.json({
-            success: true,
-            videoId,
+          if (!isIphone) {
+            return res.json({
+              success: true,
+              videoId,
+              audioUrl,
+            });
+          }
+          console.log(`[FFmpeg] Đang convert bài mới: ${videoId}`);
+          if (fs.existsSync(filePath)) {
+            console.log(`[Cache] Serving existing file for: ${videoId}`);
+            return res.sendFile(filePath);
+          }
+          const ffmpeg = spawn("ffmpeg", [
+            "-i",
             audioUrl,
+            "-vn",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "128k",
+            filePath,
+          ]);
+          let startedSending = false;
+
+          ffmpeg.stderr.on("data", () => {
+            if (!startedSending) {
+              startedSending = true;
+              setTimeout(() => {
+                if (fs.existsSync(filePath) && !res.headersSent) {
+                  console.log(`[Stream] Bắt đầu gửi file đang convert...`);
+                  res.sendFile(filePath);
+                }
+              }, 3000);
+            }
+          });
+          ffmpeg.on("close", (code) => {
+            console.log(
+              `[FFmpeg] Hoàn tất convert file: ${videoId} (Code ${code})`
+            );
+            if (!res.headersSent) {
+              res.sendFile(filePath);
+            }
+          });
+
+          ffmpeg.on("error", (err) => {
+            console.error("FFmpeg Fatal Error:", err);
+            if (!res.headersSent) res.status(500).end();
           });
         }
       );
@@ -77,23 +131,45 @@ class YoutubeController {
   async getDownload(req, res) {
     try {
       const { url } = req.query;
+      const userAgent = req.headers["user-agent"] || "";
+      const isIphone = /iPhone|iPad|iPod/i.test(userAgent);
 
       const response = await fetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         },
       });
-
-      console.log("status:", response.status);
-      console.log("content-type:", response.headers.get("content-type"));
       const contentType = response.headers.get("content-type");
       if (!response.ok) {
         return res.status(500).json({ msg: "Fail" });
       }
+      if (isIphone) {
+        const ffmpeg = spawn("ffmpeg", [
+          "-i",
+          "pipe:0",
+          "-vn",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-f",
+          "adts",
+          "pipe:1",
+        ]);
+        Readable.fromWeb(response.body).pipe(ffmpeg.stdin);
 
-      res.setHeader("Content-Type", contentType);
-      const stream = Readable.fromWeb(response.body);
-      stream.pipe(res);
+        res.setHeader("Content-Type", "audio/aac");
+        res.setHeader("Accept-Ranges", "bytes");
+        ffmpeg.stdout.pipe(res);
+        ffmpeg.stderr.on("data", (data) =>
+          console.log("ffmpeg:", data.toString())
+        );
+        ffmpeg.on("close", (code) => res.end());
+      } else {
+        res.setHeader("Content-Type", contentType);
+        const stream = Readable.fromWeb(response.body);
+        stream.pipe(res);
+      }
     } catch (err) {
       console.error(err);
       res.status(500).json({ msg: "Error" });
