@@ -130,51 +130,82 @@ class YoutubeController {
   }
   async getDownload(req, res) {
     try {
-      const { url } = req.query;
-      const userAgent = req.headers["user-agent"] || "";
-      const isIphone = /iPhone|iPad|iPod/i.test(userAgent);
+      const { videoId } = req.query;
+      if (!videoId) return res.status(400).send("Missing Video ID");
 
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        },
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Transfer-Encoding", "chunked");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.setHeader("Connection", "keep-alive");
+
+      const ytDlp = spawn("yt-dlp", [
+        "-f",
+        "bestaudio",
+        "--no-playlist",
+        "--limit-rate",
+        "1M",
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--no-check-certificates",
+        "--geo-bypass",
+        "-o",
+        "-",
+        youtubeUrl,
+      ]);
+
+      const ffmpeg = spawn("ffmpeg", [
+        "-i",
+        "pipe:0",
+        "-vn",
+        "-acodec",
+        "libmp3lame",
+        "-ab",
+        "128k",
+        "-f",
+        "mp3",
+        "pipe:1",
+      ]);
+
+      let hasError = false;
+      ytDlp.stderr.on("data", (data) => {
+        const errorMsg = data.toString();
+        console.error(`yt-dlp log: ${errorMsg}`);
+
+        if (errorMsg.includes("ERROR") && !hasError) {
+          hasError = true;
+          if (!res.headersSent) {
+            res
+              .status(500)
+              .set("Content-Type", "application/json")
+              .json({ error: "YouTube Blocked" });
+          }
+          ytDlp.kill();
+          ffmpeg.kill();
+        }
       });
-      const contentType = response.headers.get("content-type");
-      if (!response.ok) {
-        return res.status(500).json({ msg: "Fail" });
-      }
-      if (isIphone) {
-        const ffmpeg = spawn("ffmpeg", [
-          "-i",
-          "pipe:0",
-          "-vn",
-          "-c:a",
-          "aac",
-          "-b:a",
-          "128k",
-          "-f",
-          "adts",
-          "pipe:1",
-        ]);
-        Readable.fromWeb(response.body).pipe(ffmpeg.stdin);
 
-        res.setHeader("Content-Type", "audio/aac");
-        res.setHeader("Accept-Ranges", "bytes");
-        ffmpeg.stdout.pipe(res);
-        ffmpeg.stderr.on("data", (data) =>
-          console.log("ffmpeg:", data.toString())
-        );
-        ffmpeg.on("close", (code) => res.end());
-      } else {
-        res.setHeader("Content-Type", contentType);
-        res.setHeader("Transfer-Encoding", "chunked");
-        res.setHeader("Connection", "keep-alive");
-        const stream = Readable.fromWeb(response.body);
-        stream.pipe(res);
-      }
+      ffmpeg.stdout.once("data", () => {
+        if (!hasError) {
+          res.setHeader("Content-Type", "audio/mpeg");
+          res.setHeader("Transfer-Encoding", "chunked");
+          res.setHeader("X-Accel-Buffering", "no");
+          res.setHeader("Connection", "keep-alive");
+        }
+      });
+
+      ytDlp.stdout.pipe(ffmpeg.stdin);
+      ffmpeg.stdout.pipe(res);
+
+      req.on("close", () => {
+        console.log("Client disconnected, killing processes...");
+        ytDlp.kill("SIGINT");
+        ffmpeg.kill("SIGINT");
+      });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ msg: "Error" });
+      console.error("Stream Error:", err);
+      if (!res.headersSent) res.status(500).send("Stream Error");
     }
   }
 }
