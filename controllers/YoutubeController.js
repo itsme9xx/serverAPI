@@ -167,6 +167,8 @@ class YoutubeController {
         ffmpeg.on("close", (code) => res.end());
       } else {
         res.setHeader("Content-Type", contentType);
+        res.setHeader("Transfer-Encoding", "chunked");
+        res.setHeader("Connection", "keep-alive");
         const stream = Readable.fromWeb(response.body);
         stream.pipe(res);
       }
