@@ -142,8 +142,6 @@ class YoutubeController {
         "-f",
         "bestaudio",
         "--no-playlist",
-        "--limit-rate",
-        "1M",
         "--user-agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--no-check-certificates",
@@ -193,6 +191,20 @@ class YoutubeController {
         }
       });
 
+      ffmpeg.stdin.on("error", (err) => {
+        if (err.code === "EPIPE") {
+          console.log("FFmpeg stdin EPIPE - Đầu nhận đã đóng");
+        } else {
+          console.error("FFmpeg stdin Error:", err);
+        }
+      });
+
+      ytDlp.stdout.on("error", (err) => {
+        console.error("yt-dlp stdout Error:", err);
+      });
+      ffmpeg.stdout.on("error", (err) =>
+        console.error("Lỗi luồng ffmpeg:", err)
+      );
       ytDlp.stdout.pipe(ffmpeg.stdin);
       ffmpeg.stdout.pipe(res);
 
