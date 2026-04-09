@@ -137,6 +137,10 @@ class YoutubeController {
       res.setHeader("Transfer-Encoding", "chunked");
       res.setHeader("X-Accel-Buffering", "no");
       res.setHeader("Connection", "keep-alive");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="song-${videoId}.mp3"`
+      );
 
       const ytDlp = spawn("yt-dlp", [
         "-f",
